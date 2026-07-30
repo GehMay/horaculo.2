@@ -1,0 +1,84 @@
+## Módulo 5: Administração, Chamados e Vitrine (Ops & Comms)
+
+### 1. Estrutura de Banco de Dados (SQLAlchemy)
+
+A aprovação de usuários não requer uma tabela nova (ela manipula a coluna `status` da tabela `users` do Módulo 1). Precisaremos de tabelas para gerenciar o fluxo de comunicação (chamados) e as vitrines de campanhas e projetos.
+
+**Tabela: `tickets` (Chamados e Suporte)**
+
+| Coluna | Tipo | Restrições / Regras |
+| --- | --- | --- |
+| `id` | Integer | Chave Primária |
+| `user_id` | Integer | Foreign Key (`users.id` - Quem abriu o chamado) |
+| `assunto` | String | Ex: "Problema no Check-in", "Dúvida sobre Contrato" |
+| `mensagem` | Text | Corpo da solicitação |
+| `status` | String (Enum) | `ABERTO`, `EM_ATENDIMENTO`, `RESOLVIDO` |
+| `criado_em` | DateTime | Gerado automaticamente |
+
+**Tabela: `campaigns` (Horáculo - Campanhas de Cursos)**
+
+| Coluna | Tipo | Restrições / Regras |
+| --- | --- | --- |
+| `id` | Integer | Chave Primária |
+| `titulo` | String | Ex: "Pós-Graduação em Data Science" |
+| `imagem_url` | String | Banner promocional |
+| `link_externo` | String | URL para inscrição no sistema da FECAP |
+| `ativo` | Boolean | Para ligar/desligar a campanha |
+
+**Tabela: `fecap_tech_projects` (Venda de Projetos para Empresas)**
+
+| Coluna | Tipo | Restrições / Regras |
+| --- | --- | --- |
+| `id` | Integer | Chave Primária |
+| `titulo` | String | Ex: "Consultoria em Automação de RH" |
+| `descricao` | Text | Escopo do projeto vendido pela FECAP TECH |
+| `valor_estimado` | Float | (Opcional) |
+| `status` | String (Enum) | `DISPONIVEL`, `NEGOCIACAO`, `VENDIDO` |
+
+---
+
+### 2. Especificação dos Endpoints (FastAPI)
+
+Estes endpoints são de uso exclusivo da `role` FECAP (Admin), com exceção das rotas de visualização (GET) de campanhas e criação de chamados, que são públicas para usuários logados.
+
+#### 2.1. Listar e Aprovar Cadastros (Governança)
+
+* **Rota (Listar):** `GET /api/v1/admin/users/pending`
+* **Objetivo:** Retorna todos os usuários (empresas e mentores, principalmente) que estão com `status = PENDING`.
+* **Rota (Aprovar):** `PATCH /api/v1/admin/users/{user_id}/approve`
+* **Objetivo:** Muda o status do usuário para `ATIVO`. Pode engatilhar o disparo de um e-mail automático (usando bibliotecas como `FastMail` ou integração com SendGrid/AWS SES) avisando que o acesso foi liberado.
+
+#### 2.2. Gestão de Chamados (Comunicação Interna)
+
+* **Rota (Criar - Aluno/Empresa):** `POST /api/v1/tickets`
+* **Rota (Listar - Admin):** `GET /api/v1/admin/tickets`
+* **Rota (Responder - Admin):** `POST /api/v1/admin/tickets/{ticket_id}/reply`
+* **Objetivo:** Estabelecer um canal rastreável de comunicação. É fundamental para evitar que a equipe da FECAP seja sobrecarregada por e-mails espalhados.
+
+#### 2.3. Gestão da Vitrine (Horáculo e FECAP TECH)
+
+* **Rota (Criar Campanha):** `POST /api/v1/admin/campaigns`
+* **Rota (Criar Projeto Tech):** `POST /api/v1/admin/projects`
+* **Rota (Visualizar Vitrines):** `GET /api/v1/showcase` (Endpoint público para os perfis apropriados — ex: Cursos para alunos, Projetos para empresas).
+
+---
+
+### 3. Guia de Implementação para o Frontend (React)
+
+Para a equipe de desenvolvimento, o painel administrativo exige foco em tabelas robustas e fácil edição.
+
+1. **Tabelas de Dados Avançadas (DataGrids):**
+* Para listar centenas de alunos, empresas e chamados, não construa tabelas do zero com HTML padrão.
+* Utilize bibliotecas como **MUI DataGrid (Material UI)** ou **AG Grid**. Elas já vêm com filtros embutidos, paginação, busca e ordenação de colunas prontas para usar, economizando dezenas de horas de desenvolvimento do Frontend.
+
+
+2. **Sistema de Notificações (Toasts):**
+* Sempre que o Admin aprovar um cadastro ou resolver um chamado, use bibliotecas como `react-toastify` ou `sonner` para dar um feedback visual imediato (um pop-up verde no canto da tela) sem precisar recarregar a página.
+
+
+3. **Vitrines (Horáculo):**
+* As campanhas de cursos devem ser renderizadas como "Banners" dinâmicos. O ideal é criar um componente React `<Carousel/>` ou `<Banner/>` que consome a rota `GET /api/v1/showcase` e exibe de forma aleatória ou rotativa as campanhas ativas nos painéis dos alunos e mentores.
+
+
+4. **Vitrines (FECAP TECH):**
+* No painel da Empresa, crie uma aba específica chamada "Projetos FECAP TECH". Apresente os projetos como *Cards* elegantes, contendo um botão direto de "Tenho Interesse", que pode abrir automaticamente um chamado (Ticket) vinculando a empresa ao projeto de interesse.
